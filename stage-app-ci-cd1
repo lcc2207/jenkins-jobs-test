@@ -1,0 +1,69 @@
+---
+- job:
+    name: stage-app-ci-cd1
+    project-type: freestyle
+    scm:
+      - git:
+          url: https://github.com/lcc2207/test1.git
+          branches:
+            - origin/master
+    defaults: global
+    description: ''
+    disabled: false
+    display-name: stage-app-ci-cd1
+    concurrent: true
+    quiet-period: 5
+    block-downstream: false
+    block-upstream: false
+    retry-count: 3
+    logrotate:
+      daysToKeep: 3
+      numToKeep: 3
+      artifactDaysToKeep: -1
+      artifactNumToKeep: -1
+    builders:
+      - shell: |
+          export config=/etc/jenkins_jobs/config/scalr-base-conf.yml
+          export FName=$JOB_NAME-$GIT_BRANCH-$GIT_COMMIT
+
+          # Create farm and get ID
+          export farm_template=$JOB_NAME.json
+          cat {{item.farmtemp }}  | jq '.farm.name=env.FName' > $farm_template
+          export farmid=`scalr-ctl --config $config farms create-from-template --stdin < $farm_template | jq '.data.id'`
+          echo $farmid
+
+          # launch farm
+          scalr-ctl --config $config farms launch --farmId $farmid
+
+          #give scalr time to kick off
+          sleep 60
+
+          # get server id
+          scalr-ctl --config $config farms list-servers --farmId $farmid
+          export serverid=`scalr-ctl --config $config farms list-servers --farmId $farmid | jq '.data[0].id'|tr -d '"'`
+          export orchserverid='"'$serverid'"'
+
+          echo $serverid
+          echo $orchserverid
+
+          # loop till the server is up and running
+          while [ "$serverstatus" != "running" ]
+           do echo "Status: $serverstatus"
+          	export serverstatus=`scalr-ctl --config $config servers get --serverId $serverid | jq '.data.status'| tr -d '"'`
+          	sleep 30
+          done
+
+          # sleep 60 to give scalr time to run scripts
+          sleep 60
+
+          # get orchestration log id
+          export orchlogid=`scalr-ctl --config $config scripts list-orchestration-logs | jq ".data[] | select(.server.id | contains($orchserverid)).id"| sed "s/\"//g"`
+
+          # get orchestration logs
+          scalr-ctl --config $config scripts get-orchestration-log --logEntryId $orchlogid | jq '.'
+
+          # verify exit code
+          if [ `scalr-ctl --config $config scripts get-orchestration-log --logEntryId $orchlogid | jq '.data.executionExitCode'` != 0 ]
+           then
+           exit 1
+          fi
