@@ -28,7 +28,7 @@
 
           # Create farm and get ID
           export farm_template=$JOB_NAME.json
-          cat {{item.farmtemp }}  | jq '.farm.name=env.FName' > $farm_template
+          cat web-server.json  | jq '.farm.name=env.FName' > $farm_template
           export farmid=`scalr-ctl --config $config farms create-from-template --stdin < $farm_template | jq '.data.id'`
           echo $farmid
 
