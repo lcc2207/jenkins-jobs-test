@@ -23,4 +23,6 @@
       artifactNumToKeep: -1
     builders:
       - shell: |
-          echo "testing"
+          #!/bin/bash
+          export config=/etc/jenkins_jobs/config/scalr-base-conf.yml
+          scalr-ctl --config $config farms list
