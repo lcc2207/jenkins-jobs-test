@@ -1,0 +1,44 @@
+---
+- job:
+    name: farm-cleanup
+    project-type: freestyle
+    defaults: global
+    description: ''
+    disabled: false
+    display-name: farm-cleanup
+    concurrent: true
+    quiet-period: 5
+    block-downstream: false
+    block-upstream: false
+    retry-count: 3
+    logrotate:
+      daysToKeep: 3
+      numToKeep: 3
+      artifactDaysToKeep: -1
+      artifactNumToKeep: -1
+    parameters:
+    - string:
+        name: farmid
+        default:
+        description: "FarmID for the farm to terminate"
+    builders:
+      - shell: |
+          export config=/etc/jenkins_jobs/config/scalr-base-conf.yml
+
+          # get server id
+          scalr-ctl --config $config farms list-servers --farmId $farmid
+          export serverid=`scalr-ctl --config $config farms list-servers --farmId $farmid | jq '.data[0].id'|tr -d '"'`
+          echo $serverid
+
+          # terminate farm
+          scalr-ctl --config $config farms terminate --farmId $farmid
+
+          # loop till the server has been terminated
+          while [ "$serverstatus" != "terminated" ]
+            do echo "Status: $serverstatus"
+               export serverstatus=`scalr-ctl --config $config servers get --serverId $serverid | jq '.data.status'| tr -d '"'`
+               sleep 30
+          done
+
+          # delete farm
+          scalr-ctl --config $config farms delete --farmId $farmid
